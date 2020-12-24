@@ -3,6 +3,9 @@
 tcp protocol using Raw socket
 
 ## ToDO
+[ ] raw implementation \
+[ ] tcp socket implementation
+
 
 ## client (sender)
 [ ] three-way handshake \

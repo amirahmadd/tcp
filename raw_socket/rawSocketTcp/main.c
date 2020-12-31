@@ -107,7 +107,7 @@ int main(int argc, char **argv)
     /* Buffers used when taking apart the received datagrams */
     struct iphdr ip_hdr;
     struct tcphdr tcp_hdr;
-    char data_arr [10][20]= {"firstt data","second element","other data", "sth else", "aand more","first data1","second element2","other data3", "sth else4", "and more5"};
+    char data_arr [10][20]= {"firstt data","second element","other data", "sth else", "annd more","first data1","second element2","other data3", "sth else4", "and more5"};
     int data_len = sizeof(data_arr)/20;
     int sent_count = 0;
     int len_arr [100] ={0};
@@ -278,7 +278,7 @@ int skip = 0;
 
         // Reserve memory for all packets in window
         win_buf = malloc(DATAGRAM_LEN * w_size);
-        memset(ack_buf,0,DATAGRAM_LEN*w_size);
+        memset(win_buf,0,DATAGRAM_LEN*w_size);
 
         /* create all window packets in loop */
         while(i<w_size)
@@ -295,13 +295,13 @@ int skip = 0;
 
             // create raw packets & store in window buffer
 //            create_raw_datagram(win_buf + (i*databuflen), &pckbuflen, PSH_PACKET, &srcaddr, &dstaddr, databuf, databuflen);
-            create_raw_datagram(win_buf + (i*databuflen), &pckbuflen, PSH_PACKET, &srcaddr, &dstaddr, databuf, databuflen);
+            create_raw_datagram(win_buf + skip, &pckbuflen, PSH_PACKET, &srcaddr, &dstaddr, databuf, databuflen);
 
             // Update ack-number and seq-numbers
             update_seq_and_ack(win_buf + skip, &seqnum, &acknum);
 
             // dump packet
-            dump_packet(win_buf + (i*databuflen), pckbuflen);
+            dump_packet(win_buf + skip, pckbuflen);
 
             // store packet and data len for sending
             len_arr[2*i+1] = pckbuflen;
@@ -309,34 +309,34 @@ int skip = 0;
             skip = skip + pckbuflen +1;
            // printf("data : %d : dalabuf: %d \n pck len : %d , pcklen : %d \n",len_arr[2*i] ,databuflen, len_arr[2*i+1],pckbuflen);
 
-            if ((sent = sendto(sockfd, win_buf + (i*databuflen), pckbuflen, 0, (struct sockaddr*)&dstaddr,
-                               sizeof(struct sockaddr))) < 0)
-            {
-                printf("send failed\n");
-                return(1);
-            }
+//            if ((sent = sendto(sockfd, win_buf + (i*databuflen), pckbuflen, 0, (struct sockaddr*)&dstaddr,
+//                               sizeof(struct sockaddr))) < 0)
+//            {
+//                printf("send failed\n");
+//                return(1);
+//            }
             i++;
             //printf("\ni: %d\n w_size: %d\n sent_count: %d\n data_len: %d \n pld:%s\n pckbuflen:%d\n",i,w_size,sent_count,data_len,pld,pckbuflen);
         }
 
-//        i=0;
-//        skip = 0;
-//        /* sending window packets loop*/
-//        while(i<w_size){
-//        // send window buffer packets
-//
-//            if ((sent = sendto(sockfd, win_buf +skip, len_arr[2*i+1], 0, (struct sockaddr*)&dstaddr,
-//                                   sizeof(struct sockaddr))) < 0)
-//                {
-//                    printf("sendd failed\n");
-//                    return(1);
-//                }
-//
-//        // dump_packet(pckbuf, pckbuflen);
-//            dump_packet(win_buf + skip , pckbuflen);
-//            skip = skip + len_arr[2*i+1] +1;
-//            i++;
-//        }
+        i=0;
+        skip = 0;
+        /* sending window packets loop*/
+        while(i<w_size){
+        // send window buffer packets
+
+            if ((sent = sendto(sockfd, win_buf +skip, len_arr[2*i+1], 0, (struct sockaddr*)&dstaddr,
+                                   sizeof(struct sockaddr))) < 0)
+                {
+                    printf("sendd failed\n");
+                    return(1);
+                }
+
+        // dump_packet(pckbuf, pckbuflen);
+            dump_packet(win_buf + skip , pckbuflen);
+            skip = skip + len_arr[2*i+1] +1;
+            i++;
+        }
 
         /*end loop*/
 
@@ -352,7 +352,8 @@ int skip = 0;
 //            printf("send failed\n");
 //            return(1);
 //        }
-
+        memset(win_buf,0,DATAGRAM_LEN*w_size);
+        skip = 0;
         j++;
         i=0;
         sent_count=sent_count+w_size;

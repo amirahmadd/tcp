@@ -1,7 +1,6 @@
 /**
  * FILE: main.c
- * SEND DATA VIA TCP/IP USING RAW SOCKETS IN C
- * Julian Kennerknecht [Julian.kennerknecht@gmx.de]
+ * TCP/IP SERVER USING RAW SOCKETS IN C
  *
  * Prevent the kernel from sending RST-packets:
  * $ sudo iptables -A OUTPUT -p tcp --tcp-flags RST RST -j DROP
@@ -9,8 +8,8 @@
  * Drop the rule:
  * $ sudo iptables -F
  *
- * usage: sudo ./rawsock <Src-IP> <Src-Port> <Dst-IP> <Dst-Port>
- * example: sudo ./rawsock 192.168.2.109 4243 192.168.2.100 4242
+ * usage: sudo ./rawsock <Src-IP> <Src-Port>
+ * example: sudo ./rawsock 192.168.2.109 4243
  *
  * Replace Src-Port with the following code to generate random ports for testing:
  * $(perl -e 'print int(rand(4444) + 1111)')
@@ -149,7 +148,6 @@ int main(int argc, char **argv)
 	/* Configure the destination-IP-address */
 	//uint32_t srcIP = getIp(pckbuf, pckbuflen);
 	//unsigned short srcPort= getPort(pckbuf, pckbuflen);
-	dump_packet(pckbuf, pckbuflen);
 	printf(" Configure destination-ip...");
 	dstaddr.sin_family = AF_INET;
 	dstaddr.sin_port = htons(atoi("3333"));
@@ -190,7 +188,7 @@ int main(int argc, char **argv)
 
 
 	/* Wait for the response from the server */
-	//while(1){
+	while(1){
 	while ((pckbuflen = receive_packet(sockfd, pckbuf, DATAGRAM_LEN, &srcaddr)) > 0) {
 		/* Display packet-info in the terminal */
 		dump_packet(pckbuf, pckbuflen);
@@ -219,7 +217,7 @@ int main(int argc, char **argv)
 			gather_packet_data(databuf, &databuflen, seqnum, acknum, NULL, 0);
 			create_raw_datagram(pckbuf, &pckbuflen, sSendPacket, &srcaddr, &dstaddr, databuf, 8);
 			dump_packet(pckbuf, pckbuflen);
-			free(databuf);
+			//free(databuf);
 
 			if ((sent = sendto(sockfd, pckbuf, pckbuflen, 0, (struct sockaddr*)&dstaddr,
 						sizeof(struct sockaddr))) < 0) {
@@ -232,7 +230,7 @@ int main(int argc, char **argv)
 				}
 			}
 		}
-	}//}
+	}}
 
 	printf("\n");
 

@@ -308,6 +308,7 @@ void create_raw_datagram(char *pck, int *pcklen, int type,
 	setup_tcp_hdr(tcph, src->sin_port, dst->sin_port);
 
 	/* Configure the datagram, depending on the type */
+
 	switch(type) {
 		case(URG_PACKET):
 			break;

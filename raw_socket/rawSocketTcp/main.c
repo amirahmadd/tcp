@@ -1,8 +1,7 @@
 /**
  * FILE: main.c
  * SEND DATA VIA TCP/IP USING RAW SOCKETS IN C
- * Julian Kennerknecht [Julian.kennerknecht@gmx.de]
- *
+
  * Prevent the kernel from sending RST-packets:
  * $ sudo iptables -A OUTPUT -p tcp --tcp-flags RST RST -j DROP
  *
@@ -12,8 +11,6 @@
  * usage: sudo ./rawsock <Src-IP> <Src-Port> <Dst-IP> <Dst-Port>
  * example: sudo ./rawsock 192.168.2.109 4243 192.168.2.100 4242
  *
- * Replace Src-Port with the following code to generate random ports for testing:
- * $(perl -e 'print int(rand(4444) + 1111)')
  */
 
 #include <stdio.h>
@@ -44,7 +41,7 @@ void listening(void *vargp);
  * This will change after listening thread or timeout
  * default value is 1
 */
-int w_size = 1 ;
+int w_size = 5 ;
 
 /*
  * Global window time out
@@ -61,12 +58,28 @@ unsigned short should_exit = 0 ;
  */
 unsigned int ACK_COUNT = 0 ;
 
+/*window buffer , store all window packets*/
+char* win_buf;
+int win_buflen;
+
+/*ack buffer , store all received window acks*/
+char* ack_buf;
+int ack_buflen;
+
+int j =0;
+
 int main(int argc, char **argv)
 {
+
     int sockfd;
     int sent;
     int	one  = 1;
     short sSendPacket = 0;
+
+    /* listening thread for incoming packets*/
+    pthread_t listening_t;
+    /* listening thread args struct */
+    struct thread_data *args;
 
     /* The IP-addresses of both maschines in the connections */
     struct sockaddr_in srcaddr;
@@ -94,8 +107,15 @@ int main(int argc, char **argv)
     /* Buffers used when taking apart the received datagrams */
     struct iphdr ip_hdr;
     struct tcphdr tcp_hdr;
-    int i = 0;
-    char data_arr [5][20]= {"first data","second element","other data", "sth else", "and more"};
+    char data_arr [10][20]= {"firstt data","second element","other data", "sth else", "aand more","first data1","second element2","other data3", "sth else4", "and more5"};
+    int data_len = sizeof(data_arr)/20;
+    int sent_count = 0;
+    int len_arr [100] ={0};
+
+//    data_arr = malloc(DATAGRAM_LEN * w_size);
+//    memset(data_arr,0,DATAGRAM_LEN*w_size);
+//    printf("%d\n", data_len);
+
     /* Check if all necessary parameters have been set by the user */
     if (argc < 5)
     {
@@ -103,21 +123,30 @@ int main(int argc, char **argv)
         exit (1);
     }
 
-    if (argc > 5)
-    {
-        // FILE *fopen(argv[5], 'r');
-    }
+//    if (argc > 5)
+//    {
+//        // FILE *fopen(argv[5], 'r');
+//    }
 
     /* Reserve memory for the datagram */
     pckbuf = calloc(DATAGRAM_LEN, sizeof(char));
+
 
     /* Initialize the data-buffer */
     databuf = malloc(520);
 
     /* Set the payload intended to be send using the connection */
     pld = malloc(512);
-    strcpy(pld, data_arr[i]);
-    pldlen = (strlen(pld) / sizeof(char));
+//    strcpy(pld, data_arr[i]);
+//    pldlen = (strlen(pld) / sizeof(char));
+
+    /* listening thread args initialization*/
+    args = malloc(sizeof *args);
+    args->sockfd = &sockfd;
+    args->buf = &pckbuf;
+    args->len = DATAGRAM_LEN;
+    args->dst = &srcaddr;
+    //int sockfd, char *buf, size_t len, struct sockaddr_in *dst //sockfd, pckbuf, DATAGRAM_LEN, &srcaddr
 
 
     /* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
@@ -209,122 +238,126 @@ int main(int argc, char **argv)
         printf("failed.\n");
         exit(1);
     }
+
     free(databuf);
+
 
     /* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
     /* SEND DATA USING TCP-SOCKET                                    */
 
     /* Send data using the established connection */
-    gather_packet_data(databuf, &databuflen, seqnum, acknum, pld, pldlen);
-    create_raw_datagram(pckbuf, &pckbuflen, PSH_PACKET, &srcaddr, &dstaddr, databuf, databuflen);
-    dump_packet(pckbuf, pckbuflen);
-    if ((sent = sendto(sockfd, pckbuf, pckbuflen, 0, (struct sockaddr*)&dstaddr,
-                       sizeof(struct sockaddr))) < 0)
-    {
-        printf("send failed\n");
-        return(1);
-    }
-
-//    while(1){
-////        pckbuflen = receive_packet(sockfd, pckbuf, DATAGRAM_LEN, &srcaddr);
-////                /* Display packet-info in the terminal */
-////        dump_packet(pckbuf, pckbuflen);
-//
-//            /* Update ack-number and seq-numbers */
-//
-//        if(i != sizeof(data_arr)-1){
-//            strcpy(pld, data_arr[i]);
-//            pldlen = (strlen(pld) / sizeof(char));
-//            //create packet
-//
-//            /* Deconstruct the packet and extract payload */
-//            strip_raw_packet(pckbuf, pckbuflen, &ip_hdr, &tcp_hdr, pld, &pldlen);
-//            update_seq_and_ack(pckbuf, &seqnum, &acknum);
-//            memset(pckbuf, 0, DATAGRAM_LEN);
-//            gather_packet_data(databuf, &databuflen, seqnum, acknum, pld, pldlen);
-//            create_raw_datagram(pckbuf, &pckbuflen, PSH_PACKET, &srcaddr, &dstaddr, databuf, databuflen);
-//            dump_packet(pckbuf, pckbuflen);
-//            if ((sent = sendto(sockfd, pckbuf, pckbuflen, 0, (struct sockaddr*)&dstaddr,
-//                               sizeof(struct sockaddr))) < 0)
-//            {
-//                printf("send failed\n");
-//                return(1);
-//            }
-//            sleep(1000);
-//            pckbuflen = receive_packet(sockfd, pckbuf, DATAGRAM_LEN, &srcaddr);
-//
-//                /* Display packet-info in the terminal */
-//            dump_packet(pckbuf, pckbuflen);
-//                    /* Dump payload in the terminal, if there is any */
-//            if(pldlen > 0)
-//            {
-//                hexDump(pld, pldlen);
-//                printf("Dumped %d bytes.\n", pldlen);
-//            }
-//                i++;
-//        }else{
-//            break;
+//    gather_packet_data(databuf, &databuflen, seqnum, acknum, pld, pldlen);
+//        create_raw_datagram(pckbuf, &pckbuflen, PSH_PACKET, &srcaddr, &dstaddr, databuf, databuflen);
+//        dump_packet(pckbuf, pckbuflen);
+//        if ((sent = sendto(sockfd, pckbuf, pckbuflen, 0, (struct sockaddr*)&dstaddr,
+//                           sizeof(struct sockaddr))) < 0)
+//        {
+//            printf("send failed\n");
+//            return(1);
 //        }
-//
-//    }
 
-    /* Wait for the response from the server */
-    while ((pckbuflen = receive_packet(sockfd, pckbuf, DATAGRAM_LEN, &srcaddr)) > 0){
-        i++;
-        strcpy(pld, data_arr[i]);
-        pldlen = (strlen(pld) / sizeof(char));
-        /* Display packet-info in the terminal */
-        dump_packet(pckbuf, pckbuflen);
+int i,j = 0;
+int skip = 0;
 
-        /* Deconstruct the packet and extract payload */
-        strip_raw_packet(pckbuf, pckbuflen, &ip_hdr, &tcp_hdr, pld, &pldlen);
-
-        /* Dump payload in the terminal, if there is any */
-        if(pldlen > 0)
+    while(sent_count < data_len)
+    {
+        // for last data window
+        if (w_size+sent_count>data_len)
         {
-            hexDump(pld, pldlen);
-            printf("Dumped %d bytes.\n", pldlen);
+            printf("chane window size \n");
+            w_size = data_len - sent_count;
         }
+        // store databuflen in 2i & pckbuflen in 2i+1
+        //int len_arr [2*w_size] ;
 
-        /* Update ack-number and seq-numbers */
-        update_seq_and_ack(pckbuf, &seqnum, &acknum);
+        // Reserve memory for acks
+        ack_buf = malloc(DATAGRAM_LEN * w_size);
+        memset(ack_buf, 0, DATAGRAM_LEN * w_size);
+        // init & start thread
+        pthread_create(&listening_t, NULL, listening, args);
 
-        sSendPacket = 0;
-        if(tcp_hdr.fin == 1)
-        {
-            sSendPacket = FIN_PACKET;
-        }
-        else if(tcp_hdr.psh == 1 || (tcp_hdr.ack == 1 && databuflen > 0))
-        {
-            //sSendPacket = ACK_PACKET;
-        }
-        if(sSendPacket != 0)
-        {
-            /* Create the response-packet */
-            gather_packet_data(databuf, &databuflen, seqnum, acknum, NULL, 0);
-            create_raw_datagram(pckbuf, &pckbuflen, sSendPacket, &srcaddr, &dstaddr, databuf, 8);
-            dump_packet(pckbuf, pckbuflen);
-            free(databuf);
+        // Reserve memory for all packets in window
+        win_buf = malloc(DATAGRAM_LEN * w_size);
+        memset(ack_buf,0,DATAGRAM_LEN*w_size);
 
-            if ((sent = sendto(sockfd, pckbuf, pckbuflen, 0, (struct sockaddr*)&dstaddr,
+        /* create all window packets in loop */
+        while(i<w_size)
+        {
+       // printf("in while");
+
+            // Set the payload intended to be send using the connection
+            //memset(pld,0,512);
+            strcpy(pld, data_arr[i+(w_size*j)]);
+            pldlen = (strlen(pld) / sizeof(char));
+
+            // gather last packet data , set seq & ack num & pld in buffer
+            gather_packet_data(databuf, &databuflen, seqnum, acknum, pld, pldlen);
+
+            // create raw packets & store in window buffer
+//            create_raw_datagram(win_buf + (i*databuflen), &pckbuflen, PSH_PACKET, &srcaddr, &dstaddr, databuf, databuflen);
+            create_raw_datagram(win_buf + (i*databuflen), &pckbuflen, PSH_PACKET, &srcaddr, &dstaddr, databuf, databuflen);
+
+            // Update ack-number and seq-numbers
+            update_seq_and_ack(win_buf + skip, &seqnum, &acknum);
+
+            // dump packet
+            dump_packet(win_buf + (i*databuflen), pckbuflen);
+
+            // store packet and data len for sending
+            len_arr[2*i+1] = pckbuflen;
+            len_arr[2*i] = databuflen;
+            skip = skip + pckbuflen +1;
+           // printf("data : %d : dalabuf: %d \n pck len : %d , pcklen : %d \n",len_arr[2*i] ,databuflen, len_arr[2*i+1],pckbuflen);
+
+            if ((sent = sendto(sockfd, win_buf + (i*databuflen), pckbuflen, 0, (struct sockaddr*)&dstaddr,
                                sizeof(struct sockaddr))) < 0)
             {
                 printf("send failed\n");
+                return(1);
             }
-            else
-            {
-                if (i == sizeof(data_arr)-1)
-                {
-                    sSendPacket = 0;
-                    if(tcp_hdr.fin == 1)
-                    {
-                        break;
-                    }
-                }
-
-            }
+            i++;
+            //printf("\ni: %d\n w_size: %d\n sent_count: %d\n data_len: %d \n pld:%s\n pckbuflen:%d\n",i,w_size,sent_count,data_len,pld,pckbuflen);
         }
+
+//        i=0;
+//        skip = 0;
+//        /* sending window packets loop*/
+//        while(i<w_size){
+//        // send window buffer packets
+//
+//            if ((sent = sendto(sockfd, win_buf +skip, len_arr[2*i+1], 0, (struct sockaddr*)&dstaddr,
+//                                   sizeof(struct sockaddr))) < 0)
+//                {
+//                    printf("sendd failed\n");
+//                    return(1);
+//                }
+//
+//        // dump_packet(pckbuf, pckbuflen);
+//            dump_packet(win_buf + skip , pckbuflen);
+//            skip = skip + len_arr[2*i+1] +1;
+//            i++;
+//        }
+
+        /*end loop*/
+
+        // check for acks
+
+        // if acks received clear the free up memory , update window and timeout , goto next iterate
+        // else send window again
+
+
+//        if ((sent = sendto(sockfd, pckbuf, pckbuflen, 0, (struct sockaddr*)&dstaddr,
+//                           sizeof(struct sockaddr))) < 0)
+//        {
+//            printf("send failed\n");
+//            return(1);
+//        }
+
+        j++;
+        i=0;
+        sent_count=sent_count+w_size;
     }
+
 
     printf("\n");
 
@@ -347,7 +380,8 @@ int main(int argc, char **argv)
     printf(" Close socket...");
     close(sockfd);
     printf("done.\n");
-
+    //fflush(stdout);
+    pthread_exit(NULL);
     return (0);
 }
 
@@ -360,7 +394,8 @@ int main(int argc, char **argv)
  *
  * Returns: The amount of bytes received
  */
-int receive_packet(int sockfd, char *buf, size_t len, struct sockaddr_in *dst){
+int receive_packet(int sockfd, char *buf, size_t len, struct sockaddr_in *dst)
+{
     printf("receive_packet\n");
     unsigned short dst_port;
     int recvlen;
@@ -370,7 +405,7 @@ int receive_packet(int sockfd, char *buf, size_t len, struct sockaddr_in *dst){
 
     do
     {
-    printf("do while receive_packet\n");
+//    printf("do while receive_packet\n");
 
         recvlen = recvfrom(sockfd, buf, len, 0, NULL, NULL);
         if (recvlen <= 0)
@@ -389,7 +424,8 @@ int receive_packet(int sockfd, char *buf, size_t len, struct sockaddr_in *dst){
  * listening to incoming packets (acks) from server
  *
  */
-void listening(void *targs){
+void listening(void *targs)
+{
     struct thread_data *args = targs;
     //printf("Thread ID: %d",*myid );
     unsigned short dst_port;
@@ -400,22 +436,27 @@ void listening(void *targs){
     struct sockaddr_in *dst = args->dst;
     size_t len = args->len;
     /* Clear the memory used to store the datagram */
-    memset(buf, 0, len);
+    // memset(buf, 0, len);
 
     do
     {
 
-        recvlen = recvfrom(sockfd, buf, len, 0, NULL, NULL);
-        if (recvlen <= 0)
-        {
-           // strip_raw_packet(buf, recvlen, &ip_hdr, &tcp_hdr, pld, &pldlen);
+//        recvlen = recvfrom(sockfd, buf, len, 0, NULL, NULL);
+//        if (recvlen <= 0)
+//        {
+//            // strip_raw_packet(buf, recvlen, &ip_hdr, &tcp_hdr, pld, &pldlen);
+//
+//            // get ack w_size time
+//            // handle ACK packets
+//            //printf("hello from thread/n");
+//            break;
+//        }
 
-            // get ack w_size time
-            // handle ACK packets
+        //memcpy(&dst_port, buf + 22, sizeof(dst_port));
+        if(++j>5)
+        {
             break;
         }
-
-        memcpy(&dst_port, buf + 22, sizeof(dst_port));
     }
     while ( should_exit == 0 && ACK_COUNT < w_size );
 //dst_port != dst->sin_port

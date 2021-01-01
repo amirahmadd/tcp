@@ -34,21 +34,24 @@
 int receive_packet(int sockfd, char *buf, size_t len, struct sockaddr_in *dst);
 
 /* Listening to incoming packets*/
-void listening(void *vargp);
+void listening(void *targp);
+
+/* checking incoming packets*/
+void pkt_check(void *t_args);
 
 /*
  * Global window size
  * This will change after listening thread or timeout
  * default value is 1
 */
-int w_size = 5 ;
+int w_size = 2 ;
 
 /*
  * Global window time out
  * This will change after listening thread or timeout
- * default value is 0.25s
+ * default value is 30 ms
 */
-unsigned short w_timeOut = 0.25 ;
+unsigned short w_timeOut = 30 ;
 
 // for thread controlling
 unsigned short should_exit = 0 ;
@@ -66,20 +69,40 @@ int win_buflen;
 char* ack_buf;
 int ack_buflen;
 
-int j =0;
+///*tmp buffer for check packets*/
+//char* check_buf;
+
+/*received packet len buffer , store all received window acks len*/
+int r_packet_len[100];
+
+int success ; //flag for successful window send
+
+ /* Buffers used when taking apart the received datagrams */
+struct iphdr ip_hdr;
+struct tcphdr tcp_hdr;
+
+// global socket
+int sockfd;
+
 
 int main(int argc, char **argv)
 {
-
-    int sockfd;
     int sent;
     int	one  = 1;
     short sSendPacket = 0;
 
-    /* listening thread for incoming packets*/
+    /*
+     * listening thread for incoming packets
+     * check thread for checksum and packet type
+    */
     pthread_t listening_t;
+    pthread_t check_t;
+
     /* listening thread args struct */
     struct thread_data *args;
+    struct thread_data *check_args;
+
+
 
     /* The IP-addresses of both maschines in the connections */
     struct sockaddr_in srcaddr;
@@ -104,13 +127,20 @@ int main(int argc, char **argv)
     char* pld;
     int pldlen;
 
-    /* Buffers used when taking apart the received datagrams */
-    struct iphdr ip_hdr;
-    struct tcphdr tcp_hdr;
-    char data_arr [10][20]= {"firstt data","second element","other data", "sth else", "annd more","first data1","second element2","other data3", "sth else4", "and more5"};
+
+    /* data to send */
+    char data_arr [20][20]= {
+    "first data","second element","other data", "sth else","and more",
+    "first data1","second element2","other data3", "sth else4", "and more5",
+    "first data6","second element7","other data8", "sth else9", "and more10",
+    "first data11","second element12","other data13", "sth else14", "and more15"};
     int data_len = sizeof(data_arr)/20;
     int sent_count = 0;
     int len_arr [100] ={0};
+
+    // Reserve memory for tmp buffer
+   // check_buf= malloc(DATAGRAM_LEN);
+
 
 //    data_arr = malloc(DATAGRAM_LEN * w_size);
 //    memset(data_arr,0,DATAGRAM_LEN*w_size);
@@ -143,8 +173,7 @@ int main(int argc, char **argv)
     /* listening thread args initialization*/
     args = malloc(sizeof *args);
     args->sockfd = &sockfd;
-    args->buf = &pckbuf;
-    args->len = DATAGRAM_LEN;
+    args->buf = &ack_buf;
     args->dst = &srcaddr;
     //int sockfd, char *buf, size_t len, struct sockaddr_in *dst //sockfd, pckbuf, DATAGRAM_LEN, &srcaddr
 
@@ -258,23 +287,30 @@ int main(int argc, char **argv)
 
 int i,j = 0;
 int skip = 0;
-
-    while(sent_count < data_len)
+int last =0;
+int sent_skip =0;
+    while(sent_count < data_len && last == 0)
     {
         // for last data window
         if (w_size+sent_count>data_len)
         {
-            printf("chane window size \n");
-            w_size = data_len - sent_count;
+            printf("last window\n");
+            w_size = data_len - sent_count ;
+            last =1;
         }
-        // store databuflen in 2i & pckbuflen in 2i+1
-        //int len_arr [2*w_size] ;
-
-        // Reserve memory for acks
+        success =0 ;
+        printf("\nwindow size : %d\n",w_size);
+        // Reserve memory for acks and packet len
         ack_buf = malloc(DATAGRAM_LEN * w_size);
         memset(ack_buf, 0, DATAGRAM_LEN * w_size);
+
+        // set thread arg (ack_buffer len)
+        args->len = DATAGRAM_LEN*w_size;
+
+
         // init & start thread
         pthread_create(&listening_t, NULL, listening, args);
+        pthread_create(&check_t,NULL,pkt_check,NULL);
 
         // Reserve memory for all packets in window
         win_buf = malloc(DATAGRAM_LEN * w_size);
@@ -283,11 +319,12 @@ int skip = 0;
         /* create all window packets in loop */
         while(i<w_size)
         {
-       // printf("in while");
-
             // Set the payload intended to be send using the connection
             //memset(pld,0,512);
-            strcpy(pld, data_arr[i+(w_size*j)]);
+
+//            strcpy(pld, data_arr[i+(w_size*j)]);
+            strcpy(pld, data_arr[sent_skip]);
+
             pldlen = (strlen(pld) / sizeof(char));
 
             // gather last packet data , set seq & ack num & pld in buffer
@@ -303,10 +340,12 @@ int skip = 0;
             // dump packet
             dump_packet(win_buf + skip, pckbuflen);
 
-            // store packet and data len for sending
+            // store databuflen in 2i & pckbuflen in 2i+1
             len_arr[2*i+1] = pckbuflen;
             len_arr[2*i] = databuflen;
             skip = skip + pckbuflen +1;
+            sent_skip += 1;
+            i++;
            // printf("data : %d : dalabuf: %d \n pck len : %d , pcklen : %d \n",len_arr[2*i] ,databuflen, len_arr[2*i+1],pckbuflen);
 
 //            if ((sent = sendto(sockfd, win_buf + (i*databuflen), pckbuflen, 0, (struct sockaddr*)&dstaddr,
@@ -315,12 +354,19 @@ int skip = 0;
 //                printf("send failed\n");
 //                return(1);
 //            }
-            i++;
+//        if ((sent = sendto(sockfd, pckbuf, pckbuflen, 0, (struct sockaddr*)&dstaddr,
+//                           sizeof(struct sockaddr))) < 0)
+//        {
+//            printf("send failed\n");
+//            return(1);
+//        }
+
             //printf("\ni: %d\n w_size: %d\n sent_count: %d\n data_len: %d \n pld:%s\n pckbuflen:%d\n",i,w_size,sent_count,data_len,pld,pckbuflen);
         }
 
         i=0;
         skip = 0;
+
         /* sending window packets loop*/
         while(i<w_size){
         // send window buffer packets
@@ -328,35 +374,48 @@ int skip = 0;
             if ((sent = sendto(sockfd, win_buf +skip, len_arr[2*i+1], 0, (struct sockaddr*)&dstaddr,
                                    sizeof(struct sockaddr))) < 0)
                 {
-                    printf("sendd failed\n");
-                    return(1);
+                    printf("send failed\n");
+                    //return(1);
                 }
 
         // dump_packet(pckbuf, pckbuflen);
-            dump_packet(win_buf + skip , pckbuflen);
+            //dump_packet(win_buf + skip , pckbuflen);
             skip = skip + len_arr[2*i+1] +1;
             i++;
         }
-
         /*end loop*/
 
+        //time out
+        usleep(w_timeOut);
+        should_exit = 1;
+
         // check for acks
+        // if acks received update window and timeout , goto next iterate
+        while(success == 0){
+            printf("waiting for packet checking response \n");
+        }
 
-        // if acks received clear the free up memory , update window and timeout , goto next iterate
-        // else send window again
 
-
-//        if ((sent = sendto(sockfd, pckbuf, pckbuflen, 0, (struct sockaddr*)&dstaddr,
-//                           sizeof(struct sockaddr))) < 0)
-//        {
-//            printf("send failed\n");
-//            return(1);
-//        }
-        memset(win_buf,0,DATAGRAM_LEN*w_size);
+        if(success = 1){
+            printf("successfull\n");
+            sent_count=sent_count+w_size;
+            w_size +=2; //instead of *2
+            w_timeOut +=1;
+            j++;
+        }else{
+            // reduce window size and send window again
+            printf("server error , have to sent window again\n");
+            w_size -=2;
+            w_timeOut -=1;
+            sent_skip -=w_size;
+            //timeout+=0.01;
+        }
         skip = 0;
-        j++;
         i=0;
-        sent_count=sent_count+w_size;
+        should_exit=0;
+        free(ack_buf);
+        free(win_buf);
+
     }
 
 
@@ -368,21 +427,19 @@ int skip = 0;
     printf("CLEAN-UP:\n");
 
     /* Close the socket */
-    /*gather_packet_data(databuf, &databuflen, seqnum, acknum, NULL, 0);
+    gather_packet_data(databuf, &databuflen, seqnum, acknum, NULL, 0);
     create_raw_datagram(pckbuf, &pckbuflen, FIN_PACKET, &srcaddr, &dstaddr, databuf, 8);
     dump_packet(pckbuf, pckbuflen);
-    free(databuf);
-
     if ((sent = sendto(sockfd, pckbuf, pckbuflen, 0, (struct sockaddr*)&dstaddr,
                        sizeof(struct sockaddr))) < 0)
     {
-        printf("send failed\n");
-    }*/
+        printf("FIN packet failed\n");
+    }
+
     printf(" Close socket...");
     close(sockfd);
     printf("done.\n");
-    //fflush(stdout);
-    pthread_exit(NULL);
+    //pthread_exit(NULL);
     return (0);
 }
 
@@ -397,17 +454,14 @@ int skip = 0;
  */
 int receive_packet(int sockfd, char *buf, size_t len, struct sockaddr_in *dst)
 {
-    printf("receive_packet\n");
+    printf("receive SYN_ACK packet\n");
     unsigned short dst_port;
     int recvlen;
 
     /* Clear the memory used to store the datagram */
     memset(buf, 0, len);
-
     do
     {
-//    printf("do while receive_packet\n");
-
         recvlen = recvfrom(sockfd, buf, len, 0, NULL, NULL);
         if (recvlen <= 0)
         {
@@ -425,42 +479,84 @@ int receive_packet(int sockfd, char *buf, size_t len, struct sockaddr_in *dst)
  * listening to incoming packets (acks) from server
  *
  */
-void listening(void *targs)
-{
+void listening(void *targs){
     struct thread_data *args = targs;
     //printf("Thread ID: %d",*myid );
-    unsigned short dst_port;
-    int recvlen;
+    //unsigned short dst_port;
+    //struct sockaddr_in *dst = args->dst;
     //int sockfd, char *buf, size_t len, struct sockaddr_in *dst
-    int sockfd = args->sockfd;
-    char *buf = args->buf;
-    struct sockaddr_in *dst = args->dst;
-    size_t len = args->len;
-    /* Clear the memory used to store the datagram */
-    // memset(buf, 0, len);
+        //dst_port != dst->sin_port
+    //int sockfd = args->sockfd;
+    //char *buf = args->buf;
+    //size_t len = args->len;
 
+    int recvlen;
+    int skip=0;
+    //success=0;
     do
     {
-
-//        recvlen = recvfrom(sockfd, buf, len, 0, NULL, NULL);
-//        if (recvlen <= 0)
-//        {
-//            // strip_raw_packet(buf, recvlen, &ip_hdr, &tcp_hdr, pld, &pldlen);
-//
-//            // get ack w_size time
-//            // handle ACK packets
-//            //printf("hello from thread/n");
-//            break;
-//        }
-
-        //memcpy(&dst_port, buf + 22, sizeof(dst_port));
-        if(++j>5)
+        // get packets
+        recvlen = recvfrom(sockfd, ack_buf+skip, args->len, 0, NULL, NULL);
+        if (recvlen <= 0)
         {
-            break;
+         continue;
         }
+        // store packet len
+        r_packet_len[ACK_COUNT]=recvlen;
+        //dump_packet(args->buf+skip, recvlen);
+        skip += recvlen;
+        ACK_COUNT++;
     }
     while ( should_exit == 0 && ACK_COUNT < w_size );
-//dst_port != dst->sin_port
-    /* Return the amount of recieved bytes */
+   // success=1;
+    return 0;
+}
+
+void pkt_check(void *t_args){
+    success=0;
+    printf("checking Recieved packets\n");
+    int i=0 ;
+    int skip = 0;
+    char* t_pld = malloc(512);
+    memset(t_pld,0,512);
+    int t_pldlen;
+    int g =0;
+    while(1){
+        if(i == ACK_COUNT && should_exit ==0 ){
+            continue;
+        }else if(should_exit != 0 && ACK_COUNT!=w_size){
+            // exit and set flag to send window again
+            ACK_COUNT=0;
+            success = 2 ;
+            return 0;
+        }
+        else{
+            strip_raw_packet(ack_buf+skip, r_packet_len[i] , &ip_hdr, &tcp_hdr, t_pld, &t_pldlen);
+            printf("tcp hdr ack: %d\n",tcp_hdr.ack);
+            if(t_pldlen > 0) {
+                //hexDump(t_pld, t_pldlen);
+                printf("Dumped %d bytes.\n", t_pldlen);
+            }
+            if(tcp_hdr.ack == 1) {
+                skip+=r_packet_len[i];
+                i++;
+               // printf("%d : tcp hdr ack number\n",i);
+                if(i == w_size){
+                    break;
+                }
+                continue;
+            }
+            else {
+                // exit and set flag to send window again
+                ACK_COUNT=0;
+                success = 2 ;
+                return 0;
+            }
+
+        }
+    }
+    // successfull
+    ACK_COUNT=0;
+    success = 1;
     return 0;
 }

@@ -231,7 +231,7 @@ uint32_t setup_ip_hdr(struct iphdr *ip_hdr, struct sockaddr_in *src,
 	ip_hdr->ihl = 0x5;
 	ip_hdr->tos = 0;
 	ip_hdr->tot_len = sizeof(struct iphdr) + OPT_SIZE + sizeof(struct tcphdr) + len;
-	printf("  Length of IP-Hdr: %d\n", ip_hdr->tot_len);
+	//printf("  Length of IP-Hdr: %d\n", ip_hdr->tot_len);
 	ip_hdr->id = htonl(rand() % 65535);
 	ip_hdr->frag_off = 0;
 	ip_hdr->ttl = 0xff;
@@ -362,7 +362,7 @@ void create_raw_datagram(char *pck, int *pcklen, int type,
 
 		case(FIN_PACKET):
 			/* Set the datagram-flags */
-			tcph->ack = 1;
+			tcph->ack = 0;
 			tcph->fin = 1;
 
 			/* Set seq- and ack-numbers */

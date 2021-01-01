@@ -186,9 +186,9 @@ int main(int argc, char **argv)
 		return(1);
 	}
 
-
-	/* Wait for the response from the server */
-	while(1){
+int final=0;
+	/* Wait for the packets from the client */
+	while(final == 0){
 	while ((pckbuflen = receive_packet(sockfd, pckbuf, DATAGRAM_LEN, &srcaddr)) > 0) {
 		/* Display packet-info in the terminal */
 		dump_packet(pckbuf, pckbuflen);
@@ -208,6 +208,7 @@ int main(int argc, char **argv)
 		sSendPacket = 0;
 		if(tcp_hdr.fin == 1) {
 			sSendPacket = FIN_PACKET;
+			final=1;
 		}
 		else if(tcp_hdr.psh == 1 && (tcp_hdr.ack == 1 && databuflen > 0)) {
 			sSendPacket = ACK_PACKET;
@@ -225,12 +226,14 @@ int main(int argc, char **argv)
 			}
 			else {
 				sSendPacket = 0;
-				if(tcp_hdr.fin == 1) {
-					break;
-				}
+                if(tcp_hdr.fin==1){
+                    break;
+                }
+
 			}
 		}
-	}}
+	}
+	}
 
 	printf("\n");
 

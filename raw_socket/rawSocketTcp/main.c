@@ -359,7 +359,7 @@ int sent_skip =0;
             create_raw_datagram(win_buf + skip, &pckbuflen, PSH_PACKET, &srcaddr, &dstaddr, databuf, databuflen);
 
             //store seq of packet in seq_buf for ack checking
-            seq_buf[i] = i+sent_count;
+            seq_buf[i] = seqnum;
             // Update ack-number and seq-numbers
             //update_seq_and_ack(win_buf + skip, &seqnum, &acknum);
             update_window_seq_and_ack(win_buf + skip, &seqnum, &acknum);
@@ -564,7 +564,7 @@ void pkt_check(void *t_args){
             continue;
         }else if(should_exit != 0 && ACK_COUNT!=w_size){
             // exit and set flag to send window again
-            printf("time out !");
+            printf("time out !\n");
             ACK_COUNT=0;
             success = 2 ;
             return 0;
@@ -583,6 +583,9 @@ void pkt_check(void *t_args){
                 //printf("\nseq: %d : ack: %d\n\n",ntohl(tcp_hdr.seq),ntohl(tcp_hdr.ack_seq));
                // printf("\nmy seq: %d \n\n",seq_buf+i);
                /* check packet seq & ack number*/
+//                printf("\nseq: %d : %d : %d : %d : %d\n",tcp_hdr.seq,ntohl(tcp_hdr.seq),ntohs(tcp_hdr.seq),htonl(tcp_hdr.seq),htons(tcp_hdr.seq));
+//                printf("\nack: %d : %d : %d : %d : %d\n",tcp_hdr.ack_seq,ntohl(tcp_hdr.ack_seq),ntohs(tcp_hdr.ack_seq),htonl(tcp_hdr.ack_seq),htons(tcp_hdr.ack_seq));
+//                printf("\n mye seq: %d : %d : %d : %d : %d\n",seq_buf+i,ntohl(seq_buf+i),ntohs(seq_buf+i),htonl(seq_buf+i),htons(seq_buf+i));
               // printf("\nseq: %d : ack: %d\n\n",ntohl(tcp_hdr.seq),ntohl(tcp_hdr.ack_seq));
 //               for(int j =0 ; j< w_size;j++){
 //                if(ntohl(tcp_hdr.seq) == seq_buf+j || ntohl(tcp_hdr.ack_seq) == seq_buf+j){

@@ -309,7 +309,7 @@ int i,j = 0;
 int skip = 0;
 int last =0;
 int sent_skip =0;
-    while(sent_count < data_len && last == 0)
+while(sent_count < data_len && last == 0)
     {
         // for last data window
         if (w_size+sent_count>data_len)
@@ -426,8 +426,7 @@ int sent_skip =0;
         if(success = 1){
             printf("successfull\n");
             sent_count=sent_count+w_size;
-            w_size +=2; //instead of *2
-            w_timeOut -=1;
+            w_size +=2;
             j++;
         }else{
             // reduce window size and send window again
@@ -527,7 +526,6 @@ void listening(void *targs){
 
     int recvlen;
     int skip=0;
-    //success=0;
     do
     {
         // get packets
@@ -544,7 +542,6 @@ void listening(void *targs){
     }
     while ( should_exit == 0 && ACK_COUNT < w_size );
     printf("end of listening !");
-   // success=1;
     return 0;
 }
 

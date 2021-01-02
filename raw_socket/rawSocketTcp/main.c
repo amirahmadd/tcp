@@ -47,14 +47,14 @@ uint16_t cksum_tcp(struct tcphdr *tcp_hdr, u_int32_t src,
  * This will change after listening thread or timeout
  * default value is 1
 */
-int w_size = 2 ;
+int w_size = 1 ;
 
 /*
  * Global window time out
  * This will change after listening thread or timeout
  * default value is 30 ms
 */
-unsigned short w_timeOut = 30 ;
+unsigned short w_timeOut = 10 ;
 
 // for thread controlling
 unsigned short should_exit = 0 ;
@@ -133,16 +133,28 @@ int main(int argc, char **argv)
     char* pld;
     int pldlen;
 
+    clock_t start_time;
+    clock_t finish_time;
 
     /* data to send */
-    char data_arr [20][20]= {
-    "first data","second element","other data", "sth else","and more",
-    "first data1","second element2","other data3", "sth else4", "and more5",
-    "first data6","second element7","other data8", "sth else9", "and more10",
-    "first data11","second element12","other data13", "sth else14", "and more15"};
+//    char data_arr [20][20]= {
+//    "first data","second element","other data", "sth else","and more",
+//    "first data1","second element2","other data3", "sth else4", "and more5",
+//    "first data6","second element7","other data8", "sth else9", "and more10",
+//    "first data11","second element12","other data13", "sth else14", "and more15"};
+//    int data_len = sizeof(data_arr)/20;
+
+    char data_arr [2500][20];
+
+    for (int c =0 ; c<sizeof(data_arr)/20;c++){
+        //my_data[c]="my long data";
+        strcpy(data_arr[c], "my long data");
+//        data_arr[c][12]= c +'0';
+//        printf("%s\n",data_arr[c]);
+    }
     int data_len = sizeof(data_arr)/20;
 
-
+    //return 0;
     int sent_count = 0;
     int len_arr [100] ={0};
 
@@ -239,6 +251,8 @@ int main(int argc, char **argv)
     printf("\n");
     printf("COMMUNICATION:\n");
 
+    //start timer
+    start_time = clock();
     /* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
     /* THE TCP-HANDSHAKE                                             */
 
@@ -402,7 +416,7 @@ int sent_skip =0;
         /*end loop*/
 
         //time out
-        usleep(w_timeOut);
+        usleep(w_timeOut*w_size);
         should_exit = 1;
 
         // check for acks
@@ -440,6 +454,13 @@ int sent_skip =0;
     /* =-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-=-= */
     /* CLEAN-UP THE SCRIPT                                           */
 
+    //calculate time
+    finish_time = clock();
+    clock_t difference = finish_time - start_time ;
+    int msec = difference * 1000 / CLOCKS_PER_SEC;
+    printf("time : %d ms \n",msec);
+
+
     printf("CLEAN-UP:\n");
 
     /* Close the socket */
@@ -454,6 +475,7 @@ int sent_skip =0;
 
     printf(" Close socket...");
     close(sockfd);
+    free(databuf);
     printf("done.\n");
     //pthread_exit(NULL);
     return (0);
@@ -553,7 +575,7 @@ void pkt_check(void *t_args){
         }
         else{
             strip_raw_packet(ack_buf+skip, r_packet_len[i] , &ip_hdr, &tcp_hdr, t_pld, &t_pldlen);
-            tcp_cs = cksum_tcp((struct tcphdr *)&tcp_hdr, ip_hdr.saddr, ip_hdr.daddr, t_pldlen);
+            tcp_cs = cksum_tcp((struct tcphdr *)&tcp_hdr, (u_int32_t)ip_hdr.saddr, (u_int32_t)ip_hdr.daddr, t_pldlen);
             //printf("\ntcp hdr check: %d\nin function tcp hdr check: %d\n",tcp_hdr.check,tcp_cs);
             //if(tcp_cs == tcp_hdr.check){
                 //printf("tcp hdr ack: %d\n",tcp_hdr.ack);
@@ -565,7 +587,7 @@ void pkt_check(void *t_args){
                 //printf("\nseq: %d : ack: %d\n\n",ntohl(tcp_hdr.seq),ntohl(tcp_hdr.ack_seq));
                // printf("\nmy seq: %d \n\n",seq_buf+i);
                /* check packet seq & ack number*/
-               printf("\nseq: %d : ack: %d\n\n",ntohl(tcp_hdr.seq),ntohl(tcp_hdr.ack_seq));
+              // printf("\nseq: %d : ack: %d\n\n",ntohl(tcp_hdr.seq),ntohl(tcp_hdr.ack_seq));
 //               for(int j =0 ; j< w_size;j++){
 //                if(ntohl(tcp_hdr.seq) == seq_buf+j || ntohl(tcp_hdr.ack_seq) == seq_buf+j){
 //                    printf("equal");

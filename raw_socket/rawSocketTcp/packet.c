@@ -105,6 +105,30 @@ void read_seq_and_ack(char *pck, uint32_t *seq, uint32_t *ack)
 	*ack = ntohl(acknum);
 }
 
+
+/*
+ * Extract both the sequence-number and the acknowledgement-number from
+ * the last datagram and then returned the updated numbers.
+ *
+ * @pck: A buffer containing the datagram with the numbers
+ * @seq: An address to write the updated seqeunce-number to
+ * @ack: An address to write the updated acknowledgement-number to
+ */
+void update_window_seq_and_ack(char *pck, uint32_t *seq, uint32_t *ack)
+{
+	uint32_t seqnum, acknum;
+	/* Read sequence number */
+	memcpy(&seqnum, (pck + 24), 4);
+	/* Read acknowledgement number */
+	memcpy(&acknum, (pck + 28), 4);
+
+	/* Convert host to network byte order */
+	//*seq = ntohl(acknum);
+	//*ack = ntohl(seqnum);
+	*ack = htonl(acknum) + 1;
+	*seq = htonl(seqnum) + 1;
+}
+
 /*
  * Extract both the sequence-number and the acknowledgement-number from
  * the received datagram and then returned the updated numbers.
@@ -231,7 +255,7 @@ uint32_t setup_ip_hdr(struct iphdr *ip_hdr, struct sockaddr_in *src,
 	ip_hdr->ihl = 0x5;
 	ip_hdr->tos = 0;
 	ip_hdr->tot_len = sizeof(struct iphdr) + OPT_SIZE + sizeof(struct tcphdr) + len;
-	//printf("  Length of IP-Hdr: %d\n", ip_hdr->tot_len);
+	printf("  Length of IP-Hdr: %d\n", ip_hdr->tot_len);
 	ip_hdr->id = htonl(rand() % 65535);
 	ip_hdr->frag_off = 0;
 	ip_hdr->ttl = 0xff;

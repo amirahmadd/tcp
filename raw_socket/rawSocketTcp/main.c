@@ -39,6 +39,9 @@ void listening(void *targp);
 /* checking incoming packets*/
 void pkt_check(void *t_args);
 
+/* checksum function for incoming packets*/
+uint16_t cksum_tcp(struct tcphdr *tcp_hdr, u_int32_t src,
+		u_int32_t dst, int len);
 /*
  * Global window size
  * This will change after listening thread or timeout
@@ -69,7 +72,10 @@ int win_buflen;
 char* ack_buf;
 int ack_buflen;
 
-///*tmp buffer for check packets*/
+/*seq buffer , store all window packet seq for ack check*/
+int* seq_buf;
+
+/*tmp buffer for check packets*/
 //char* check_buf;
 
 /*received packet len buffer , store all received window acks len*/
@@ -135,6 +141,8 @@ int main(int argc, char **argv)
     "first data6","second element7","other data8", "sth else9", "and more10",
     "first data11","second element12","other data13", "sth else14", "and more15"};
     int data_len = sizeof(data_arr)/20;
+
+
     int sent_count = 0;
     int len_arr [100] ={0};
 
@@ -304,6 +312,10 @@ int sent_skip =0;
         ack_buf = malloc(DATAGRAM_LEN * w_size);
         memset(ack_buf, 0, DATAGRAM_LEN * w_size);
 
+        // Reserve memory for packets seq
+        seq_buf = malloc(w_size * sizeof(int));
+        memset(seq_buf, 0, w_size * sizeof(int));
+
         // set thread arg (ack_buffer len)
         args->len = DATAGRAM_LEN*w_size;
 
@@ -334,8 +346,12 @@ int sent_skip =0;
 //            create_raw_datagram(win_buf + (i*databuflen), &pckbuflen, PSH_PACKET, &srcaddr, &dstaddr, databuf, databuflen);
             create_raw_datagram(win_buf + skip, &pckbuflen, PSH_PACKET, &srcaddr, &dstaddr, databuf, databuflen);
 
+            //store seq of packet in seq_buf for ack checking
+            seq_buf[i] = i+sent_count;
             // Update ack-number and seq-numbers
-            update_seq_and_ack(win_buf + skip, &seqnum, &acknum);
+            //update_seq_and_ack(win_buf + skip, &seqnum, &acknum);
+            update_window_seq_and_ack(win_buf + skip, &seqnum, &acknum);
+
 
             // dump packet
             dump_packet(win_buf + skip, pckbuflen);
@@ -415,7 +431,7 @@ int sent_skip =0;
         should_exit=0;
         free(ack_buf);
         free(win_buf);
-
+        free(seq_buf);
     }
 
 
@@ -521,6 +537,11 @@ void pkt_check(void *t_args){
     memset(t_pld,0,512);
     int t_pldlen;
     int g =0;
+    int tcp_cs = 0;
+//    char seq=0;
+//    char ack=0;
+
+    //int ip_cs =0;
     while(1){
         if(i == ACK_COUNT && should_exit ==0 ){
             continue;
@@ -532,26 +553,39 @@ void pkt_check(void *t_args){
         }
         else{
             strip_raw_packet(ack_buf+skip, r_packet_len[i] , &ip_hdr, &tcp_hdr, t_pld, &t_pldlen);
-            printf("tcp hdr ack: %d\n",tcp_hdr.ack);
-            if(t_pldlen > 0) {
-                //hexDump(t_pld, t_pldlen);
-                printf("Dumped %d bytes.\n", t_pldlen);
-            }
-            if(tcp_hdr.ack == 1) {
-                skip+=r_packet_len[i];
-                i++;
-               // printf("%d : tcp hdr ack number\n",i);
-                if(i == w_size){
-                    break;
+            tcp_cs = cksum_tcp((struct tcphdr *)&tcp_hdr, ip_hdr.saddr, ip_hdr.daddr, t_pldlen);
+            //printf("\ntcp hdr check: %d\nin function tcp hdr check: %d\n",tcp_hdr.check,tcp_cs);
+            //if(tcp_cs == tcp_hdr.check){
+                //printf("tcp hdr ack: %d\n",tcp_hdr.ack);
+                if(t_pldlen > 0) {
+                    //hexDump(t_pld, t_pldlen);
+                    //printf("Dumped %d bytes.\n", t_pldlen);
                 }
-                continue;
-            }
-            else {
-                // exit and set flag to send window again
-                ACK_COUNT=0;
-                success = 2 ;
-                return 0;
-            }
+                if(tcp_hdr.ack == 1) {
+                //printf("\nseq: %d : ack: %d\n\n",ntohl(tcp_hdr.seq),ntohl(tcp_hdr.ack_seq));
+               // printf("\nmy seq: %d \n\n",seq_buf+i);
+               /* check packet seq & ack number*/
+               printf("\nseq: %d : ack: %d\n\n",ntohl(tcp_hdr.seq),ntohl(tcp_hdr.ack_seq));
+//               for(int j =0 ; j< w_size;j++){
+//                if(ntohl(tcp_hdr.seq) == seq_buf+j || ntohl(tcp_hdr.ack_seq) == seq_buf+j){
+//                    printf("equal");
+//                }
+ //              }
+                    skip+=r_packet_len[i];
+                    i++;
+                   // printf("%d : tcp hdr ack number\n",i);
+                    if(i == w_size){
+                        break;
+                    }
+                    continue;
+                }
+                else {
+                    // exit and set flag to send window again
+                    ACK_COUNT=0;
+                    success = 2 ;
+                    return 0;
+                }
+            //}
 
         }
     }
@@ -559,4 +593,32 @@ void pkt_check(void *t_args){
     ACK_COUNT=0;
     success = 1;
     return 0;
+}
+// received packets checksum calculation
+uint16_t cksum_tcp(struct tcphdr *tcp_hdr, u_int32_t src,
+		u_int32_t dst, int len)
+{
+	/* The pseudoheader used to calculate the checksum */
+	struct pseudohdr psh;
+	char *psd;
+	int psd_sz;
+
+	/* Configure the TCP-Pseudo-Header for checksum calculation */
+	psh.source_addr = src;
+	psh.dest_addr = dst;
+	psh.placeholder = 0;
+	psh.protocol = IPPROTO_TCP;
+	psh.tcp_length = htons(sizeof(struct tcphdr) + OPT_SIZE + len);
+
+	/* Paste everything into the pseudogram */
+	psd_sz = sizeof(struct pseudohdr) + sizeof(struct tcphdr) + OPT_SIZE + len;
+	psd = malloc(psd_sz);
+	/* Copy the pseudo-header into the pseudogram */
+	memcpy(psd, (char *)&psh, sizeof(struct pseudohdr));
+	/* Attach the TCP-header and -content after the pseudo-header */
+	memcpy(psd + sizeof(struct pseudohdr), tcp_hdr,
+			sizeof(struct tcphdr) + OPT_SIZE + len);
+
+	/* Return the checksum of the TCP-header */
+	return(in_cksum((char*)psd, psd_sz));
 }

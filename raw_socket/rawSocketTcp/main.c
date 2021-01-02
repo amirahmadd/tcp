@@ -54,7 +54,7 @@ int w_size = 1 ;
  * This will change after listening thread or timeout
  * default value is 30 ms
 */
-unsigned short w_timeOut = 10 ;
+unsigned short w_timeOut = 30 ;
 
 // for thread controlling
 unsigned short should_exit = 0 ;
@@ -137,21 +137,19 @@ int main(int argc, char **argv)
     clock_t finish_time;
 
     /* data to send */
-//    char data_arr [20][20]= {
-//    "first data","second element","other data", "sth else","and more",
-//    "first data1","second element2","other data3", "sth else4", "and more5",
-//    "first data6","second element7","other data8", "sth else9", "and more10",
-//    "first data11","second element12","other data13", "sth else14", "and more15"};
-//    int data_len = sizeof(data_arr)/20;
+    char data_arr [20][20]= {
+    "first data","second element","other data", "sth else","and more",
+    "first data1","second element2","other data3", "sth else4", "and more5",
+    "first data6","second element7","other data8", "sth else9", "and more10",
+    "first data11","second element12","other data13", "sth else14", "and more15"};
 
-    char data_arr [2500][20];
+    /*for more data */
+//    char data_arr [2500][20];
+//    for (int c =0 ; c<sizeof(data_arr)/20;c++){
+//        //my_data[c]="my long data";
+//        strcpy(data_arr[c], "my long data");
+//    }
 
-    for (int c =0 ; c<sizeof(data_arr)/20;c++){
-        //my_data[c]="my long data";
-        strcpy(data_arr[c], "my long data");
-//        data_arr[c][12]= c +'0';
-//        printf("%s\n",data_arr[c]);
-    }
     int data_len = sizeof(data_arr)/20;
 
     //return 0;
@@ -366,7 +364,6 @@ int sent_skip =0;
             //update_seq_and_ack(win_buf + skip, &seqnum, &acknum);
             update_window_seq_and_ack(win_buf + skip, &seqnum, &acknum);
 
-
             // dump packet
             dump_packet(win_buf + skip, pckbuflen);
 
@@ -430,13 +427,13 @@ int sent_skip =0;
             printf("successfull\n");
             sent_count=sent_count+w_size;
             w_size +=2; //instead of *2
-            w_timeOut +=1;
+            w_timeOut -=1;
             j++;
         }else{
             // reduce window size and send window again
             printf("server error , have to sent window again\n");
             w_size -=2;
-            w_timeOut -=1;
+            w_timeOut +=1;
             sent_skip -=w_size;
             //timeout+=0.01;
         }
@@ -546,6 +543,7 @@ void listening(void *targs){
         ACK_COUNT++;
     }
     while ( should_exit == 0 && ACK_COUNT < w_size );
+    printf("end of listening !");
    // success=1;
     return 0;
 }
@@ -560,15 +558,13 @@ void pkt_check(void *t_args){
     int t_pldlen;
     int g =0;
     int tcp_cs = 0;
-//    char seq=0;
-//    char ack=0;
 
-    //int ip_cs =0;
     while(1){
         if(i == ACK_COUNT && should_exit ==0 ){
             continue;
         }else if(should_exit != 0 && ACK_COUNT!=w_size){
             // exit and set flag to send window again
+            printf("time out !");
             ACK_COUNT=0;
             success = 2 ;
             return 0;

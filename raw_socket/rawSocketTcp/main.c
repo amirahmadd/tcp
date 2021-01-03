@@ -137,18 +137,19 @@ int main(int argc, char **argv)
     clock_t finish_time;
 
     /* data to send */
-    char data_arr [20][20]= {
-    "first data","second element","other data", "sth else","and more",
-    "first data1","second element2","other data3", "sth else4", "and more5",
-    "first data6","second element7","other data8", "sth else9", "and more10",
-    "first data11","second element12","other data13", "sth else14", "and more15"};
+//    char data_arr [20][20]= {
+//    "first data","second element","other data", "sth else","and more",
+//    "first data1","second element2","other data3", "sth else4", "and more5",
+//    "first data6","second element7","other data8", "sth else9", "and more10",
+//    "first data11","second element12","other data13", "sth else14", "and more15"};
 
     /*for more data */
-//    char data_arr [2500][20];
-//    for (int c =0 ; c<sizeof(data_arr)/20;c++){
-//        //my_data[c]="my long data";
-//        strcpy(data_arr[c], "my long data");
-//    }
+    //char data_arr [3300][20];
+    char data_arr [2500][20];
+    for (int c =0 ; c<sizeof(data_arr)/20;c++){
+        //my_data[c]="my long data";
+        strcpy(data_arr[c], "my long data");
+    }
 
     int data_len = sizeof(data_arr)/20;
 
@@ -359,7 +360,7 @@ while(sent_count < data_len && last == 0)
             create_raw_datagram(win_buf + skip, &pckbuflen, PSH_PACKET, &srcaddr, &dstaddr, databuf, databuflen);
 
             //store seq of packet in seq_buf for ack checking
-            seq_buf[i] = seqnum;
+            //seq_buf[i] = seqnum;
             // Update ack-number and seq-numbers
             //update_seq_and_ack(win_buf + skip, &seqnum, &acknum);
             update_window_seq_and_ack(win_buf + skip, &seqnum, &acknum);
@@ -418,23 +419,33 @@ while(sent_count < data_len && last == 0)
 
         // check for acks
         // if acks received update window and timeout , goto next iterate
+
         while(success == 0){
             printf("waiting for packet checking response \n");
         }
 
 
-        if(success = 1){
+        if(success == 1){
             printf("successfull\n");
             sent_count=sent_count+w_size;
-            w_size +=2;
-            j++;
+            if(w_size < 64){
+                w_size *=2;
+            }
+            //w_size +=2;
+
+           // w_timeOut-=1;
         }else{
             // reduce window size and send window again
-            printf("server error , have to sent window again\n");
-            w_size -=2;
-            w_timeOut +=1;
+            printf("server error , have to send window again\n");
             sent_skip -=w_size;
-            //timeout+=0.01;
+            if(w_size>1){
+                w_size /=2;
+            }else{
+                printf("connection error , window size < 2\n");
+                return 1;
+            }
+            w_timeOut +=1;
+            last=0;
         }
         skip = 0;
         i=0;
@@ -541,7 +552,7 @@ void listening(void *targs){
         ACK_COUNT++;
     }
     while ( should_exit == 0 && ACK_COUNT < w_size );
-    printf("end of listening !");
+    printf("\nend of listening !\n");
     return 0;
 }
 
@@ -549,13 +560,18 @@ void pkt_check(void *t_args){
     success=0;
     printf("checking Recieved packets\n");
     int i=0 ;
-    int skip = 0;
+    u_int skip = 0;
     char* t_pld = malloc(512);
     memset(t_pld,0,512);
     int t_pldlen;
     int g =0;
     int tcp_cs = 0;
-
+    if(w_size>50){
+        printf("fake error !\n");
+        ACK_COUNT=0;
+        success = 2 ;
+        return 0;
+    }
     while(1){
         if(i == ACK_COUNT && should_exit ==0 ){
             continue;
@@ -593,7 +609,10 @@ void pkt_check(void *t_args){
                     i++;
                    // printf("%d : tcp hdr ack number\n",i);
                     if(i == w_size){
-                        break;
+//                        break;
+                        ACK_COUNT=0;
+                        success = 1;
+                        return 0;
                     }
                     continue;
                 }
@@ -608,9 +627,9 @@ void pkt_check(void *t_args){
         }
     }
     // successfull
-    ACK_COUNT=0;
-    success = 1;
-    return 0;
+//    ACK_COUNT=0;
+//    success = 1;
+//    return 0;
 }
 // received packets checksum calculation
 uint16_t cksum_tcp(struct tcphdr *tcp_hdr, u_int32_t src,

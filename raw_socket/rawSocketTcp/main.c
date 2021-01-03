@@ -145,7 +145,7 @@ int main(int argc, char **argv)
 
     /*for more data */
     //char data_arr [3300][20];
-    char data_arr [2500][20];
+    char data_arr [4000][20];
     for (int c =0 ; c<sizeof(data_arr)/20;c++){
         //my_data[c]="my long data";
         strcpy(data_arr[c], "my long data");
@@ -444,7 +444,7 @@ while(sent_count < data_len && last == 0)
                 printf("connection error , window size < 2\n");
                 return 1;
             }
-            w_timeOut +=1;
+            w_timeOut +=5;
             last=0;
         }
         skip = 0;

@@ -321,8 +321,8 @@ while(sent_count < data_len && last == 0)
         success =0 ;
         printf("\nwindow size : %d\n",w_size);
         // Reserve memory for acks and packet len
-        ack_buf = malloc(DATAGRAM_LEN * w_size);
-        memset(ack_buf, 0, DATAGRAM_LEN * w_size);
+        ack_buf = malloc(DATAGRAM_LEN * w_size*sizeof(char));
+        memset(ack_buf, 0, DATAGRAM_LEN * w_size*sizeof(char));
 
         // Reserve memory for packets seq
         seq_buf = malloc(w_size * sizeof(int));
@@ -337,8 +337,8 @@ while(sent_count < data_len && last == 0)
         pthread_create(&check_t,NULL,pkt_check,NULL);
 
         // Reserve memory for all packets in window
-        win_buf = malloc(DATAGRAM_LEN * w_size);
-        memset(win_buf,0,DATAGRAM_LEN*w_size);
+        win_buf = malloc(DATAGRAM_LEN * w_size*sizeof(char));
+        memset(win_buf,0,DATAGRAM_LEN*w_size*sizeof(char));
 
         /* create all window packets in loop */
         while(i<w_size)

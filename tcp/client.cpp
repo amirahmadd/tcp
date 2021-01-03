@@ -22,7 +22,7 @@ int main(int argc, char *argv[])
     //we need 3 things: ip address and port number and count of packet, in that order
     if(argc != 4)
     {
-        cerr << "Usage: ip_address port" << endl; exit(0); 
+        cerr << "Usage: ip_address port count" << endl; exit(0); 
     } //grab the IP address and port number 
     char *serverIp = argv[1]; int port = atoi(argv[2]); 
     //create a message buffer 
@@ -45,9 +45,11 @@ int main(int argc, char *argv[])
     }
     cout << "Connected to the server!" << endl;
     int bytesRead, bytesWritten = 0;
-    struct timeval start1, end1;
     
     cout << "write sth to send to server "<< argv[3]<< " times" << endl;
+    clock_t difference ;
+    clock_t finish_time ;
+    clock_t start_time  ;
     while(1){
 
         cout << ">";
@@ -60,16 +62,18 @@ int main(int argc, char *argv[])
             send(clientSd, (char*)&msg, strlen(msg), 0);
             break;
         }
-        gettimeofday(&start1, NULL);
-       // clock_t timer = clock();
-        for(int i =0;i<=atoi(argv[3]);i++){
-             bytesWritten += send(clientSd, (char*)&msg, strlen(msg), 0);
+        start_time = clock();
+        for(int i =0 ;i<= atoi(argv[3]);i++){
+            bytesWritten += send(clientSd, (char*)&msg, strlen(msg), 0);
+            
         }
-
-        gettimeofday(&end1, NULL);
+        //
+        finish_time = clock();
+        clock_t difference = finish_time - start_time ;
+        int msec = difference * 1000 / CLOCKS_PER_SEC;
+        printf("time : %d ms \n",msec);
+        //
         cout << "Bytes written: " << bytesWritten << endl;
-        cout << "Elapsed time: " << (end1.tv_usec- start1.tv_usec) 
-          << " microseconds" << endl;
         cout << "write exit to enable chat system" << endl;
     }
     while(1)
@@ -97,7 +101,6 @@ int main(int argc, char *argv[])
         }
         cout << "Server: " << msg << endl;
     }
-    gettimeofday(&end1, NULL);
     close(clientSd);
     cout << "********Session********" << endl;
     cout << "Bytes written: " << bytesWritten << 

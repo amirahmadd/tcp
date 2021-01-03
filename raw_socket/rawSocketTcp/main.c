@@ -79,7 +79,7 @@ int* seq_buf;
 //char* check_buf;
 
 /*received packet len buffer , store all received window acks len*/
-int r_packet_len[100];
+int r_packet_len[500];
 
 int success ; //flag for successful window send
 
@@ -144,8 +144,7 @@ int main(int argc, char **argv)
 //    "first data11","second element12","other data13", "sth else14", "and more15"};
 
     /*for more data */
-    //char data_arr [3300][20];
-    char data_arr [2500][20];
+    char data_arr [30000][20];
     for (int c =0 ; c<sizeof(data_arr)/20;c++){
         //my_data[c]="my long data";
         strcpy(data_arr[c], "my long data");
@@ -483,6 +482,8 @@ while(sent_count < data_len && last == 0)
     printf(" Close socket...");
     close(sockfd);
     free(databuf);
+    printf("\n%d packets \n",data_len);
+    printf("%d sent \n",sent_count);
     printf("done.\n");
     //pthread_exit(NULL);
     return (0);

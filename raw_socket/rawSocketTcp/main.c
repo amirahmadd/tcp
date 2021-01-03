@@ -145,7 +145,7 @@ int main(int argc, char **argv)
 
     /*for more data */
     //char data_arr [3300][20];
-    char data_arr [4000][20];
+    char data_arr [2500][20];
     for (int c =0 ; c<sizeof(data_arr)/20;c++){
         //my_data[c]="my long data";
         strcpy(data_arr[c], "my long data");

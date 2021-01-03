@@ -1,5 +1,6 @@
 # depslib dependency file v1.0
-1609506830 source:/home/ahmad/aa/uni/6/CN/tcp/tcp/tcpServer/main.cpp
+1608794126 source:/home/ahmad/aa/uni/6/CN/tcp/tcp/tcpServer/main.cpp
+	<iostream>
 	<iostream>
 	<sys/types.h>
 	<unistd.h>
